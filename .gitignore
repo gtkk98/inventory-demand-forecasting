@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+.vscode/
+.env
+
+models/*.pkl
+data/processed/
+
+*.pyc
