@@ -1,0 +1,12 @@
+check,issue_count,status,details
+Required columns,0,PASS,All required columns exist.
+Missing required values,0,PASS,Total missing cells in required columns: 0
+Invalid dates,0,PASS,Rows with unparseable or missing dates: 0
+Valid store identifiers,0,PASS,Invalid store identifiers: 0
+Valid item identifiers,0,PASS,Invalid item identifiers: 0
+Numeric sales values,0,PASS,Missing or non-numeric sales values: 0
+Finite sales values,0,PASS,Infinite or negative-infinite sales values: 0
+Non-negative sales,0,PASS,Rows with negative sales: 0
+Whole-number sales,0,PASS,Rows with fractional sales: 0. Review whether sales represent individual units
+Unique store-product-date keys,0,PASS,No duplicate store-product-date keys.
+Date range,0,PASS,From 2013-01-01 to 2017-12-31.

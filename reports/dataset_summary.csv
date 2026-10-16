@@ -1,0 +1,10 @@
+metric,value
+total_records,913000
+unique_dates,1826
+unique_stores,10
+unique_products,50
+total_sales,47704512
+average_sales_per_record,52.250286966046005
+median_sales_per_record,47.0
+minimum_date,2013-01-01
+maximum_date,2017-12-31
