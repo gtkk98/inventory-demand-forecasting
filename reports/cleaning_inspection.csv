@@ -1,0 +1,13 @@
+check,affected_records,severity,details
+Missing values: date,0,PASS,Number of missing values in 'date'.
+Missing values: store,0,PASS,Number of missing values in 'store'.
+Missing values: item,0,PASS,Number of missing values in 'item'.
+Missing values: sales,0,PASS,Number of missing values in 'sales'.
+Invalid dates,0,PASS,Non-missing date values that cannot be parsed are also counted here.
+Invalid identifiers: store,0,PASS,"IDs should be positive, finite whole numbers."
+Invalid identifiers: item,0,PASS,"IDs should be positive, finite whole numbers."
+Invalid or non-finite sales,0,PASS,"Includes missing, non-numeric, infinite, and negative-infinity sales values."
+Negative sales,0,PASS,Investigate before deciding whether to keep or remove these records.
+Fractional sales,0,PASS,Sales are expected to represent whole units in this dataset.
+Duplicate date-store-item records,0,PASS,"Counts every row belonging to a duplicated key group, not just the extra rows."
+Total records,913000,INFO,Total number of rows in the raw dataset.

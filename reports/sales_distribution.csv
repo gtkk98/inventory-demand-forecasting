@@ -1,0 +1,11 @@
+metric,value
+minimum,0.0
+25th_percentile,30.0
+median,47.0
+75th_percentile,70.0
+90th_percentile,93.0
+95th_percentile,107.0
+99th_percentile,135.0
+maximum,231.0
+mean,52.250286966046005
+standard_deviation,28.801143603517097
