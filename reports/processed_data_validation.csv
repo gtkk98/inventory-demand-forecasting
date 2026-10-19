@@ -1,0 +1,9 @@
+check,status,details
+Required columns,PASS,"Actual columns: ['date', 'store', 'item', 'sales']"
+Expected row count,PASS,"Observed 913,000 rows; expected 913,000."
+No missing required values,PASS,Missing required values: 0.
+Integer column types,PASS,"store, item, and sales must use integer dtypes."
+"Valid dates, IDs, and sales",PASS,"Dates must be valid, IDs positive, and sales non-negative."
+Unique date-store-item keys,PASS,Duplicate keys: 0.
+Chronological ordering,PASS,"Rows should be ordered by date, store, and item."
+Complete daily store-product coverage,PASS,500 combinations; 1826 expected dates per combination.
