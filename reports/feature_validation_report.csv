@@ -1,0 +1,12 @@
+check,status,details
+Required feature columns,PASS,Missing columns: []
+Expected row count,PASS,"Observed 913,000 rows; expected 913,000."
+Valid dates,PASS,Invalid or missing dates: 0
+Unique date-store-item records,PASS,Duplicate records: 0
+Lag 1 missing values,PASS,Observed 500; expected 500.
+Lag 7 missing values,PASS,"Observed 3,500; expected 3,500."
+Rolling 7-day mean missing values,PASS,"Observed 3,500; expected 3,500."
+Rolling 30-day mean missing values,PASS,"Observed 15,000; expected 15,000."
+Rolling 7-day standard deviation missing values,PASS,"Observed 3,500; expected 3,500."
+No infinite or invalid numeric features,PASS,All non-missing numeric values are valid and finite.
+Non-negative historical sales features,PASS,"Lag values, rolling means, and rolling standard deviations must not be negative."
