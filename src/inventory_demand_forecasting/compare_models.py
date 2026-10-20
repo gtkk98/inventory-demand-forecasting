@@ -1,4 +1,6 @@
 
+"""Compare baseline, Linear Regression, and XGBoost models."""
+
 from pathlib import Path
 
 import pandas as pd
@@ -6,18 +8,13 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-BASELINE_METRICS_PATH = (
-    PROJECT_ROOT / "reports" / "baseline_metrics.csv"
-)
+REPORTS_DIR = PROJECT_ROOT / "reports"
 
-LINEAR_METRICS_PATH = (
-    PROJECT_ROOT / "reports" / "linear_regression_metrics.csv"
-)
+BASELINE_METRICS_PATH = REPORTS_DIR / "baseline_metrics.csv"
+LINEAR_METRICS_PATH = REPORTS_DIR / "linear_regression_metrics.csv"
+XGBOOST_METRICS_PATH = REPORTS_DIR / "xgboost_metrics.csv"
 
-OUTPUT_PATH = (
-    PROJECT_ROOT / "reports" / "model_comparison.csv"
-)
-
+OUTPUT_PATH = REPORTS_DIR / "model_comparison.csv"
 
 REQUIRED_COLUMNS = [
     "model",
@@ -27,42 +24,53 @@ REQUIRED_COLUMNS = [
 ]
 
 
-def compare_models(
-    baseline_metrics: pd.DataFrame,
-    linear_metrics: pd.DataFrame,
-) -> pd.DataFrame:
+def compare_models(*metric_tables: pd.DataFrame) -> pd.DataFrame:
     """Combine model metrics and rank models by WAPE."""
 
-    for name, metrics in [
-        ("Baseline", baseline_metrics),
-        ("Linear Regression", linear_metrics),
-    ]:
+    if not metric_tables:
+        raise ValueError("At least one metrics table is required.")
+
+    validated_tables = []
+
+    for index, metrics in enumerate(metric_tables, start=1):
         missing = set(REQUIRED_COLUMNS) - set(metrics.columns)
 
         if missing:
             raise ValueError(
-                f"{name} metrics are missing columns: {sorted(missing)}"
+                f"Metrics table {index} is missing columns: "
+                f"{sorted(missing)}"
             )
 
-    combined = pd.concat(
-        [
-            baseline_metrics[REQUIRED_COLUMNS],
-            linear_metrics[REQUIRED_COLUMNS],
-        ],
-        ignore_index=True,
-    )
+        selected = metrics[REQUIRED_COLUMNS].copy()
 
-    for column in ["MAE", "RMSE", "WAPE_percent"]:
-        combined[column] = pd.to_numeric(
-            combined[column],
-            errors="raise",
+        for column in ["MAE", "RMSE", "WAPE_percent"]:
+            selected[column] = pd.to_numeric(
+                selected[column],
+                errors="raise",
+            )
+
+        if not selected[REQUIRED_COLUMNS].notna().all().all():
+            raise ValueError(
+                f"Metrics table {index} contains missing values."
+            )
+
+        if (selected[["MAE", "RMSE", "WAPE_percent"]] < 0).any().any():
+            raise ValueError(
+                f"Metrics table {index} contains negative error metrics."
+            )
+
+        validated_tables.append(selected)
+
+    combined = pd.concat(validated_tables, ignore_index=True)
+
+    if combined["model"].duplicated().any():
+        duplicates = combined.loc[
+            combined["model"].duplicated(keep=False), "model"
+        ].tolist()
+
+        raise ValueError(
+            f"Duplicate model names found: {duplicates}"
         )
-
-    if not combined[["MAE", "RMSE", "WAPE_percent"]].notna().all().all():
-        raise ValueError("Model metrics contain missing values.")
-
-    if (combined[["MAE", "RMSE", "WAPE_percent"]] < 0).any().any():
-        raise ValueError("Model error metrics cannot be negative.")
 
     return (
         combined.sort_values("WAPE_percent")
@@ -71,19 +79,29 @@ def compare_models(
 
 
 def main() -> None:
-    for path in [BASELINE_METRICS_PATH, LINEAR_METRICS_PATH]:
-        if not path.exists():
+    """Load metrics, create a ranking, and save the report."""
+
+    metric_paths = [
+        BASELINE_METRICS_PATH,
+        LINEAR_METRICS_PATH,
+        XGBOOST_METRICS_PATH,
+    ]
+
+    for path in metric_paths:
+        if not path.is_file():
             raise FileNotFoundError(
                 f"Metrics file not found: {path}. "
-                "Run the baseline and training scripts first."
+                "Run all baseline and model training scripts first."
             )
 
     baseline_metrics = pd.read_csv(BASELINE_METRICS_PATH)
     linear_metrics = pd.read_csv(LINEAR_METRICS_PATH)
+    xgboost_metrics = pd.read_csv(XGBOOST_METRICS_PATH)
 
     comparison = compare_models(
         baseline_metrics,
         linear_metrics,
+        xgboost_metrics,
     )
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
