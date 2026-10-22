@@ -1,0 +1,2 @@
+prediction_rows,MAE,RMSE,WAPE_percent,mean_error,median_error,underprediction_rows,overprediction_rows,exact_prediction_rows,actual_sales_total,predicted_sales_total
+182500,6.085796844297534,7.913157085220121,10.347352591774161,0.11083142706465753,-0.1335879999999996,89814,92686,0,10733740,10713513.2645607
