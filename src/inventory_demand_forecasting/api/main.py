@@ -11,6 +11,16 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 
+# Import the response-model and request-validation schemas.
+from inventory_demand_forecasting.api.schemas import (
+    ForecastRequest,
+    ForecastResponse,
+)
+
+# Import the service that builds features and predicts demand.
+from inventory_demand_forecasting.api.forecast_service import forecast_sales
+
+
 # Resolve the project root.
 # main.py -> api -> inventory_demand_forecasting -> src -> project root.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -60,3 +70,22 @@ def health_check() -> dict[str, str | bool]:
         "model_artifact_exists": model_exists,
         "timestamp_utc": current_time,
     }
+
+
+@app.post(
+    "/forecast",
+    response_model=ForecastResponse,
+    tags=["Forecasting"],
+)
+def create_forecast(request: ForecastRequest) -> ForecastResponse:
+    """Return a real demand forecast from the trained XGBoost model."""
+
+    # Generate a prediction using historical sales and the requested date.
+    result = forecast_sales(
+        store=request.store,
+        item=request.item,
+        forecast_date=request.date,
+    )
+
+    # Validate the returned data against the response schema.
+    return ForecastResponse(**result)
