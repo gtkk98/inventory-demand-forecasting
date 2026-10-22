@@ -29,6 +29,8 @@ from inventory_demand_forecasting.api_client import (
     request_forecast,
 )
 
+from inventory.recommendations import generate_inventory_recommendations
+
 # ---------------------------------------------------------------------------
 # 1. PROJECT PATHS AND DASHBOARD CONFIGURATION
 # ---------------------------------------------------------------------------
@@ -50,6 +52,11 @@ PREDICTIONS_PATH = (
 
 # Define the report containing overall XGBoost error statistics.
 ERROR_SUMMARY_PATH = REPORTS_DIR / "xgboost_error_summary.csv"
+
+# Historical sales used for inventory demand calculations.
+HISTORICAL_SALES_PATH = (
+    PROJECT_ROOT / "data" / "processed" / "sales_clean.csv"
+)
 
 # Configure the browser tab and use the available page width.
 st.set_page_config(
@@ -598,12 +605,14 @@ def main() -> None:
     )
 
     # Create five tabs, including the new live forecasting interface.
+        # Create the dashboard tabs.
     (
         overview_tab,
         sales_tab,
         errors_tab,
         explorer_tab,
         live_forecast_tab,
+        inventory_tab,
     ) = st.tabs(
         [
             "Overview & Models",
@@ -611,9 +620,9 @@ def main() -> None:
             "Error Analysis",
             "Store & Item Explorer",
             "Live Forecast",
+            "Inventory Planning",
         ]
     )
-
     # -----------------------------------------------------------------------
     # TAB 1: OVERVIEW AND MODEL COMPARISON
     # -----------------------------------------------------------------------
@@ -1217,10 +1226,185 @@ def main() -> None:
         "Inventory & Demand Forecasting System | "
         "Python · Pandas · Scikit-learn · XGBoost · Streamlit"
     )
+    
+    
+    # -----------------------------------------------------------------------
+    # TAB 7: INVENTORY PLANNING
+    # -----------------------------------------------------------------------
+
+    with inventory_tab:
+        st.subheader("Inventory Replenishment Recommendations")
+
+        st.write(
+            "Estimate replenishment needs from historical daily sales. "
+            "Current stock and supplier lead time are supplied manually."
+        )
+
+        st.info(
+            "Planning estimate only: the dataset contains historical sales, "
+            "not live stock levels, purchase orders, or supplier information."
+        )
+
+        with st.form("inventory_recommendation_form"):
+            store_column, item_column = st.columns(2)
+
+            selected_inventory_store = store_column.selectbox(
+                "Store ID",
+                options=list(range(1, 11)),
+                key="inventory_store",
+            )
+
+            selected_inventory_item = item_column.selectbox(
+                "Item ID",
+                options=list(range(1, 51)),
+                key="inventory_item",
+            )
+
+            stock_column, lead_time_column = st.columns(2)
+
+            current_stock = stock_column.number_input(
+                "Current stock (units)",
+                min_value=0,
+                max_value=1_000_000,
+                value=100,
+                step=1,
+                key="inventory_current_stock",
+            )
+
+            lead_time_days = lead_time_column.number_input(
+                "Supplier lead time (days)",
+                min_value=1,
+                max_value=365,
+                value=7,
+                step=1,
+                key="inventory_lead_time",
+            )
+
+            service_level = st.selectbox(
+                "Target service level",
+                options=[0.90, 0.95, 0.975, 0.99],
+                index=1,
+                format_func=lambda value: f"{value:.1%}",
+                help=(
+                    "A planning target used to calculate safety stock. "
+                    "It is not a guarantee of product availability."
+                ),
+                key="inventory_service_level",
+            )
+
+            target_days = st.number_input(
+                "Target days of stock after replenishment",
+                min_value=1,
+                max_value=365,
+                value=30,
+                step=1,
+                key="inventory_target_days",
+            )
+
+            inventory_submitted = st.form_submit_button(
+                "Calculate Recommendation",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if inventory_submitted:
+            try:
+                # Load the historical data only when the form is submitted.
+                historical_sales = pd.read_csv(
+                    HISTORICAL_SALES_PATH,
+                    parse_dates=["date"],
+                )
+
+                # Use only the selected store-item history.
+                selected_history = historical_sales.loc[
+                    (historical_sales["store"] == selected_inventory_store)
+                    & (historical_sales["item"] == selected_inventory_item)
+                ].copy()
+
+                inventory_input = pd.DataFrame(
+                    [
+                        {
+                            "store": selected_inventory_store,
+                            "item": selected_inventory_item,
+                            "current_stock": current_stock,
+                            "lead_time_days": lead_time_days,
+                        }
+                    ]
+                )
+
+                recommendations = generate_inventory_recommendations(
+                    selected_history,
+                    inventory_input,
+                    service_level=service_level,
+                    target_days_of_stock=int(target_days),
+                )
+
+                recommendation = recommendations.iloc[0]
+
+                # Present the main recommendation metrics.
+                metric_columns = st.columns(4)
+
+                metric_columns[0].metric(
+                    "Average daily demand",
+                    f"{recommendation['avg_daily_demand']:.2f} units",
+                )
+
+                metric_columns[1].metric(
+                    "Safety stock",
+                    f"{recommendation['safety_stock']:.0f} units",
+                )
+
+                metric_columns[2].metric(
+                    "Reorder point",
+                    f"{recommendation['reorder_point']:.0f} units",
+                )
+
+                metric_columns[3].metric(
+                    "Suggested order",
+                    f"{recommendation['recommended_order_quantity']:,} units",
+                )
+
+                # Explain the stock status.
+                if recommendation["status"] == "REORDER":
+                    st.warning(
+                        "Reorder recommended: current stock is at or "
+                        "below the calculated reorder point."
+                    )
+                else:
+                    st.success(
+                        "Current stock is above the calculated reorder point. "
+                        "Continue monitoring demand and stock levels."
+                    )
+
+                st.subheader("Recommendation Details")
+
+                st.dataframe(
+                    recommendations,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                st.download_button(
+                    label="Download inventory recommendation (CSV)",
+                    data=make_csv_download(recommendations),
+                    file_name=(
+                        f"inventory_recommendation_store_"
+                        f"{selected_inventory_store}_item_"
+                        f"{selected_inventory_item}.csv"
+                    ),
+                    mime="text/csv",
+                    key="download_inventory_recommendation",
+                )
+
+            except (ValueError, KeyError, OSError) as error:
+                st.error(
+                    f"Could not calculate the inventory recommendation: {error}"
+                )
+
 
 
 # ---------------------------------------------------------------------------
-# 6. APPLICATION ENTRY POINT
+# 8. APPLICATION ENTRY POINT
 # ---------------------------------------------------------------------------
 
 # Execute the dashboard only when Streamlit runs this module as a script.

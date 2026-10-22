@@ -1,7 +1,7 @@
 [project]
 name = "inventory-demand-forecasting"
 version = "0.1.0"
-description = "Add your description here"
+description = "Machine learning demand forecasting and inventory replenishment recommendations"
 readme = "README.md"
 authors = [
     { name = "Thilina Kumarasiri", email = "119777366+gtkk98@users.noreply.github.com" }
