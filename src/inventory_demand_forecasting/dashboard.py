@@ -17,6 +17,17 @@ import pandas as pd
 # Import Streamlit to create the interactive web dashboard.
 import streamlit as st
 
+# Import date for the forecast-date selector.
+from datetime import date
+
+# Import HTTP errors so the dashboard can handle API failures.
+import httpx
+
+# Import the functions that communicate with the forecasting API.
+from inventory_demand_forecasting.api_client import (
+    check_api_health,
+    request_forecast,
+)
 
 # ---------------------------------------------------------------------------
 # 1. PROJECT PATHS AND DASHBOARD CONFIGURATION
@@ -586,13 +597,20 @@ def main() -> None:
         f"{predictions['date'].max():%Y-%m-%d}",
     )
 
-    # Create four tabs to keep the dashboard organized.
-    overview_tab, sales_tab, errors_tab, explorer_tab = st.tabs(
+    # Create five tabs, including the new live forecasting interface.
+    (
+        overview_tab,
+        sales_tab,
+        errors_tab,
+        explorer_tab,
+        live_forecast_tab,
+    ) = st.tabs(
         [
             "Overview & Models",
             "Daily Sales",
             "Error Analysis",
             "Store & Item Explorer",
+            "Live Forecast",
         ]
     )
 
@@ -1007,9 +1025,175 @@ def main() -> None:
                     ),
                     key="download_filtered_predictions",
                 )
+                
+    
+    # -----------------------------------------------------------------------
+    # TAB 5: LIVE FORECASTING THROUGH FASTAPI
+    # -----------------------------------------------------------------------
+
+    with live_forecast_tab:
+        # Introduce the live forecasting feature.
+        st.subheader("Generate a Live Demand Forecast")
+
+        # Explain that this tab calls the trained model through FastAPI.
+        st.caption(
+            "Request a new demand estimate from the trained XGBoost model "
+            "using the selected store, item, and forecast date."
+        )
+
+        # Check API health and display whether the service is available.
+        try:
+            health = check_api_health()
+
+            # Display the API's status and model artifact availability.
+            if (
+                health.get("status") == "ok"
+                and health.get("model_artifact_exists") is True
+            ):
+                st.success("Forecasting API is available and the model artifact exists.")
+            else:
+                st.warning(
+                    "The API responded, but its health status indicates "
+                    "that the service or model may be unavailable."
+                )
+
+        # Handle an unavailable API without crashing the dashboard.
+        except httpx.HTTPError as error:
+            st.error(
+                "Cannot connect to the forecasting API. "
+                "Make sure the FastAPI server is running at "
+                "http://127.0.0.1:8000."
+            )
+            st.caption(f"Technical details: {error}")
+
+        # Add an input form so the user submits all values together.
+        with st.form("live_forecast_form"):
+            # Display store and item selectors side by side.
+            store_column, item_column = st.columns(2)
+
+            # Let the user choose a store from the supported range.
+            selected_forecast_store = store_column.selectbox(
+                "Store ID",
+                options=list(range(1, 11)),
+                index=0,
+                key="live_forecast_store",
+            )
+
+            # Let the user choose an item from the supported range.
+            selected_forecast_item = item_column.selectbox(
+                "Item ID",
+                options=list(range(1, 51)),
+                index=0,
+                key="live_forecast_item",
+            )
+
+            # Default to the next calendar day.
+            selected_forecast_date = st.date_input(
+                "Forecast date",
+                value=date.today(),
+                key="live_forecast_date",
+                help=(
+                    "Choose the date for which you want to estimate demand. "
+                    "The model requires at least 30 consecutive historical "
+                    "sales observations before this date."
+                ),
+            )
+
+            # Submit all selected inputs to the forecasting API.
+            submitted = st.form_submit_button(
+                "Generate Forecast",
+                type="primary",
+                use_container_width=True,
+            )
+
+        # Request a forecast only after the user submits the form.
+        if submitted:
+            try:
+                # Send the selected values through the API client.
+                forecast_result = request_forecast(
+                    store=selected_forecast_store,
+                    item=selected_forecast_item,
+                    forecast_date=selected_forecast_date,
+                )
+
+                # Display a success message when the request completes.
+                st.success("Forecast generated successfully.")
+
+                # Display the returned prediction prominently.
+                st.metric(
+                    "Predicted demand (units)",
+                    f"{forecast_result['predicted_sales']:.2f}",
+                    help=(
+                        "Estimated demand from XGBoost. "
+                        "This is a prediction, not a guarantee of actual sales."
+                    ),
+                )
+
+                # Display the identifiers and date used for the forecast.
+                result_column, item_result_column, date_result_column = (
+                    st.columns(3)
+                )
+
+                result_column.metric(
+                    "Store",
+                    str(forecast_result["store"]),
+                )
+
+                item_result_column.metric(
+                    "Item",
+                    str(forecast_result["item"]),
+                )
+
+                date_result_column.metric(
+                    "Forecast date",
+                    str(forecast_result["date"]),
+                )
+
+                # Identify the model that produced the result.
+                st.caption(
+                    f"Forecasting model: {forecast_result['model_name']}"
+                )
+
+                # Let the user download the forecast response as JSON.
+                st.download_button(
+                    label="Download forecast result (JSON)",
+                    data=pd.Series(forecast_result).to_json(indent=2),
+                    file_name=(
+                        f"forecast_store_{selected_forecast_store}_"
+                        f"item_{selected_forecast_item}_"
+                        f"{selected_forecast_date.isoformat()}.json"
+                    ),
+                    mime="application/json",
+                    key="download_live_forecast",
+                )
+
+            # Handle HTTP errors such as validation failures and server errors.
+            except httpx.HTTPStatusError as error:
+                st.error(
+                    f"The forecasting API returned HTTP "
+                    f"{error.response.status_code}."
+                )
+
+                # Show the API's response body when available.
+                st.code(error.response.text or "No error details were returned.")
+
+            # Handle connection failures and request timeouts.
+            except httpx.RequestError as error:
+                st.error(
+                    "Could not reach the forecasting API. "
+                    "Check that the server is running and try again."
+                )
+                st.caption(f"Technical details: {error}")
+
+            # Handle unexpected response structures or other request issues.
+            except (KeyError, ValueError, TypeError) as error:
+                st.error(
+                    f"The forecast response could not be processed: {error}"
+                )
+
 
     # -----------------------------------------------------------------------
-    # 5. DATA PREVIEW AND FOOTER
+    # 6. DATA PREVIEW AND FOOTER
     # -----------------------------------------------------------------------
 
     # Place a general data preview at the bottom of the dashboard.
